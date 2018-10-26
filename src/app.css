@@ -1,0 +1,61 @@
+html,
+body {
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+[v-cloak] {
+  display: none;
+}
+
+.markerFont {
+  font-family: 'Permanent Marker';
+}
+
+#renderCanvas {
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+#unitPopup {
+  position : fixed;
+  background-color: lightgray;
+  border: 1px solid black;
+  z-index: 300;
+}
+
+#header {
+  position : fixed;
+  width : 100%;
+  top : 0;
+  z-index: 5;
+}
+
+#unitEditor {
+  position: fixed; 
+  top: 50px; 
+  bottom: 50px;
+  width: 98%;
+  background-color: rgba(255,255,255,0.85);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index:100;
+  overflow-y: auto;
+}
+
+#footer {
+  position : fixed;
+  width : 100%;
+  bottom : 0;
+  z-index: 5;
+}
+
+.color-block {
+  display: inline-block;
+  width : 15px;
+  height: 15px;
+}

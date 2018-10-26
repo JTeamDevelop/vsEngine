@@ -1,0 +1,321 @@
+<html>
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta name="viewport" content="width=device-width">
+  <meta name="description" content="VS Engine">
+  <meta name="keywords" content="HTML,JavaScript">
+  <title>Outlands</title>
+  <link href='https://fonts.googleapis.com/css?family=Permanent Marker' rel='stylesheet'>
+  <link rel="stylesheet" href="lib/noty.3.1.4.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <link rel="stylesheet" href="src-vs/app.css">
+</head>
+
+<body>
+  <canvas id="renderCanvas"></canvas>
+  <div id="unitPopup" class="p-1" v-if="unit" :style="{left:p[0],top:p[1],}" v-cloak>
+    <div class="row m-0">
+      <div class="col p-0">HP: {{unit.hp}}</div>
+      <div class="col p-0" align="right">
+        <button type="button" class="btn btn-sm btn-secondary" @click="unit=null">&times;</button>
+      </div>
+    </div>
+    <h6 class="dropdown-header" v-if="ranges.length>0" v-cloak>Ranges</h6>
+    <div v-for="(r,k) in ranges" @click="highlight(k)" style="cursor:pointer;">{{r}}</div>
+    <h6 class="dropdown-header" v-if="attacks.length>0" v-cloak>Attacks</h6>
+    <div v-for="(a,k) in attacks" style="cursor:pointer;" @click="makeAttack(k)">{{a}}</div>
+  </div>
+  <div id="header" class="p-1" style="overflow:visible;">
+    <div align="center">
+      <div class="btn-group" role="group" align="center">
+        <button type="button" class="btn btn-secondary" @click="showMapTools = !showMapTools,showMapInfo = !showMapTools">New Map</button>
+        <button type="button" class="btn btn-secondary" @click="showEditor()">Units/Teams</button>
+      </div>
+      <div class="m-1" v-if="showMapInfo" style="max-width:600px;" v-cloak>
+        <div class="input-group">
+          <div class="input-group-prepend">
+            <span class="input-group-text">Name</span>
+          </div>
+          <input type="text" class="form-control" v-model="map.name">
+          <div class="input-group-append">
+            <button type="button" class="btn btn-success" @click="saveMap()">Save Map</button>
+            <button type="button" class="btn btn-danger" @click="deleteMap()">Delete</button>
+          </div>
+        </div>
+      </div>
+      <div class="m-1" v-if="showMapTools" style="max-width:600px;" v-cloak>
+        <div class="input-group p-0 mb-1">
+          <div class="input-group-prepend">
+            <span class="input-group-text">Load</span>
+          </div>
+          <select class="custom-select" v-model="mapToLoad">
+            <option v-for="(m,i) in savedMaps" v-if="m" :value="i">{{m.name}} {{m.type}} ({{m.w}}x{{m.h}})</option>
+          </select>
+          <div class="input-group-append">
+            <button class="btn btn-info" type="button" @click="loadMap()">Load</button>
+          </div>
+        </div>
+        <div class="row m-0" align="center">
+          <div class="col-3 input-group p-0">
+            <div class="input-group-prepend">
+              <span class="input-group-text">Width</span>
+            </div>
+            <input type="number" class="form-control" v-model="mapData[0]">
+          </div>
+          <div class="col-3 input-group p-0">
+            <div class="input-group-prepend">
+              <span class="input-group-text">Height</span>
+            </div>
+            <input type="number" class="form-control" v-model="mapData[1]">
+          </div>
+          <div class="col input-group p-0">
+            <div class="input-group-prepend">
+              <span class="input-group-text">Seed</span>
+            </div>
+            <input type="number" class="form-control" v-model="seed">
+          </div>
+        </div>
+        <div class="row">
+          <div class="col input-group">
+            <div class="input-group-prepend">
+              <span class="input-group-text">Type</span>
+            </div>
+            <select class="custom-select" v-model="mapData[2]">
+              <option v-for="(n,i) in mapTypeNames" :value="i">{{n}}</option>
+            </select>
+            <div class="input-group-append">
+              <button class="btn btn-outline-secondary" type="button" @click="createMap()">Create</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="my-1 px-2" v-if="unitsToAdd.length>0" style="background-color:lightgrey;" v-cloak>
+        <div>Click the button and then the map to the unit to the scene.</div>
+        <button type="button" class="btn btn-secondary mr-1" v-for="u in unitsToAdd" @click="addUnitToScene(u)">{{u.name}}</button>
+      </div>
+    </div>
+  </div>
+  <div id="unitEditor" align="center" v-if="show" v-cloak>
+    <div class="p-1" align="center">
+      <div class="btn-group" role="group">
+        <button type="button" class="btn btn-secondary" @click="subUI='units'">Units</button>
+        <button type="button" class="btn btn-secondary" @click="subUI='teams'">Teams</button>
+      </div>
+    </div>
+    <ui-teams v-if="subUI=='teams'"></ui-teams>
+    <div v-if="subUI=='units'" style="max-width:600px;">
+      <h2 class="markerFont">Units 
+        <div class="btn-group" role="group" aria-label="Basic example">
+          <button type="button" class="btn btn-outline-info" @click="addUnit()">
+            <img src="media/open-iconic/svg/plus.svg">
+          </button>
+          <button type="button" class="btn btn-outline-info" @click="save()">Save</button>
+        </div>
+      </h2>
+      <div class="w-100" v-if="uid > -1" v-cloak>
+        <h5 v-if="unit.hasOwnProperty('core')" align="center" v-cloak>Core Unit: Changes Will Not Be Saved</h5>
+        <div class="input-group">
+          <div class="input-group-prepend">
+            <span class="input-group-text">Name</span>
+          </div>
+          <input type="text" class="form-control" v-model="unit.name">
+          <div class="input-group-append">
+            <button class="btn btn-outline-secondary" type="button" @click="uid=-1">Close</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-4">
+            <div class="input-group">
+              <div class="input-group-prepend">
+                <span class="input-group-text">Move (ft)</span>
+              </div>
+              <input type="number" class="form-control" v-model="unit.move">
+            </div>
+          </div>
+          <div class="col p-0">
+            <div class="input-group">
+              <div class="input-group-prepend">
+                <span class="input-group-text">HP</span>
+              </div>
+              <input type="number" class="form-control" v-model="unit.hp">
+              <div class="input-group-appendpend">
+                <span class="input-group-text">{{(unit.hp/4).toFixed(1)}} HD</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-3">
+            <div class="input-group">
+              <div class="input-group-prepend">
+                <span class="input-group-text">AC</span>
+              </div>
+              <input type="number" class="form-control" v-model="unit.AC">
+            </div>
+          </div>
+        </div>
+        <h3 class="markerFont">Attacks 
+          <div class="btn-group" role="group">
+            <button type="button" class="btn btn-outline-info"><img src="media/open-iconic/svg/plus.svg" width="15" height="15"></button>
+            <button type="button" class="btn btn-outline-info" @click="showAtkInfo = !showAtkInfo"><img src="media/open-iconic/svg/question-mark.svg" width="15" height="15"></button>
+          </div>
+        </h3>
+        <div v-if="showAtkInfo" align="left">
+          <div><span class="font-weight-bold">+ to hit:</span> Bonus to hit. Designate multiple attacks with a "/" between them (ex: 5/1/-2 would mean 3 attacks).</div>
+          <div><span class="font-weight-bold">Damage:</span> Attack damage. Use dice notation, and add "+" for a bonus (ex: 2d6+2). If an attack uses separate dice use a "," between (ex: 1d6,1d4).
+            Designate multiple attacks with a "/" between them (ex: 1d6/1d6). The # of attacks must match between the bonus and the damage.
+          </div>
+        </div>
+        <div class="row m-0" v-for="a in unit.attacks">
+          <div class="row">
+            <div class="col">
+              <div class="input-group">
+                <div class="input-group-prepend">
+                  <span class="input-group-text">Name</span>
+                </div>
+                <input type="text" class="form-control" v-model="a.name">
+              </div>
+            </div>  
+            <div class="col">
+              <div class="input-group">
+                <div class="input-group-prepend">
+                  <span class="input-group-text">Range (ft)</span>
+                </div>
+                <input type="number" class="form-control" v-model="a.rng">
+              </div>
+            </div> 
+          </div>
+          <div class="row">
+            <div class="col">
+              <div class="input-group">
+                <div class="input-group-prepend">
+                  <span class="input-group-text">+ to hit</span>
+                </div>
+                <input type="text" class="form-control" v-model="a.b">
+              </div>
+            </div>
+            <div class="col">
+              <div class="input-group">
+                <div class="input-group-prepend">
+                  <span class="input-group-text">Damage</span>
+                </div>
+                <input type="text" class="form-control" v-model="a.dmg">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-if="uid == -1">
+        <div class="btn-group mr-1" v-for="(u,i) in units">
+          <button type="button" class="btn btn-outline-secondary" @click="uid = i">{{u.name}}</button>
+          <button type="button" class="btn btn-secondary dropdown-toggle dropdown-toggle-split" data-toggle="dropdown">
+            <span class="sr-only">Toggle Dropdown</span>
+          </button>
+          <div class="dropdown-menu">
+            <a class="dropdown-item" href="#" @click="clone(u)">Clone</a>
+            <a class="dropdown-item" href="#" @click="units.splice(i,1)">Delete</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <template id="ui-teams">
+    <div align="center" >
+      <h3 class="markerFont">Teams 
+        <div class="btn-group" role="group" aria-label="Basic example">
+          <button type="button" class="btn btn-outline-info" @click="newTeam()">
+            <img src="media/open-iconic/svg/plus.svg">
+          </button>
+          <button type="button" class="btn btn-outline-info" @click="save()">Save</button>
+        </div>
+      </h3>
+      <div class="w-100 mb-1" v-for="(T,i) in teams">
+        <div class="row m-0" >
+          <div class="col">
+            <div class="input-group">
+              <div class="input-group-prepend">
+                <span class="input-group-text">Name</span>
+              </div>
+              <input type="text" class="form-control" v-model="T.name">
+            </div>
+          </div>
+          <div class="col">
+            <div class="input-group">
+              <div class="input-group-prepend">
+                <span class="input-group-text"><div class="color-block mr-1" :style="{'background-color':T.color}"></div>Color</span>
+              </div>
+              <select class="form-control custom-select" v-model="T.color">
+                <option class="font-weight-bold" v-for="(key,val) in colors" :style="{'background-color':key}" v-bind:value="key">{{val}}</option>
+              </select>
+            </div>
+          </div>
+          <div class="col">
+            <div class="input-group">
+              <div class="input-group-prepend">
+                <span class="input-group-text">Add Unit</span>
+              </div>
+              <select class="form-control custom-select" v-model="tu[i]">
+                <option class="font-weight-bold" v-for="u in units" :value="u">{{u.name}}</option>
+              </select>
+              <div class="input-group-append">
+                <button class="btn btn-outline-secondary" type="button" @click="addUnit(i)">Add</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="p-1" :style="{'border-bottom':'2px solid '+T.color,'border-top':'2px solid '+T.color}" v-if="T.units.length>0" v-cloak>
+          <div>
+            <div class="btn-group" role="group" v-for="(u,j) in T.units">
+              <button type="button" class="btn btn-outline-secondary" @click="qU = [i,j]">{{u.name}}, hp:{{u.hp}}, AC:{{u.AC}}</button>
+              <button type="button" class="btn btn-secondary" @click="removeUnit(i,j)"><img src="media/open-iconic/svg/delete.svg" width="20" height="20"></button>
+            </div>
+          </div>
+          <div class="row m-0" v-if="qU[0] == i" v-cloak>
+            <div class="col">
+              <div class="input-group">
+                <div class="input-group-prepend">
+                  <button type="button" class="btn btn-outline-secondary" @click="qU = [-1,0]">Close</button>
+                  <span class="input-group-text">Name</span>
+                </div>
+                <input type="text" class="form-control" v-model="T.units[qU[1]].name">
+              </div>
+            </div>
+            <div class="col">
+              <div class="input-group">
+                <div class="input-group-prepend">
+                  <span class="input-group-text">HP</span>
+                </div>
+                <input type="number" class="form-control" v-model="T.units[qU[1]].hp">
+              </div>
+            </div>
+            <div class="col">
+              <div class="input-group">
+                <div class="input-group-prepend">
+                  <span class="input-group-text">AC</span>
+                </div>
+                <input type="number" class="form-control" v-model="T.units[qU[1]].AC">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+</body>
+
+<script src="lib/rot.0.7.min.js"></script>
+<script src="lib/vue.2.5.16.min.js"></script>
+<script src="lib/noty.3.1.4.min.js"></script>
+<script src="lib/popper.1.12.3.min.js"></script>
+<script src="https://preview.babylonjs.com/babylon.js"></script>
+<!-- Link to the last version of BabylonJS loaders to enable loading filetypes such as .gltf -->
+<script src="https://preview.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+<script src="https://preview.babylonjs.com/gui/babylon.gui.min.js"></script>
+<!-- Link to pep.js to ensure pointer events work consistently in all browsers -->
+<script src="https://code.jquery.com/pep/0.4.1/pep.js"></script>
+
+<script type="module" src="src-vs/app.js"></script>
+
+</html>
